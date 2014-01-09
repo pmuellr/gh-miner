@@ -1,0 +1,4 @@
+miner.png
+
+    - from http://commons.wikimedia.org/wiki/File:Miner_Vector.svg
+    - author Ramon Venson
