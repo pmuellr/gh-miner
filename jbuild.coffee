@@ -1,6 +1,8 @@
 # Licensed under the Apache License. See footer for details.
 
+fs   = require "fs"
 path = require "path"
+zlib = require "zlib"
 
 try
     require "./lib/XstackTrace"
@@ -82,6 +84,15 @@ WatchConfig.files = WatchConfig.files.trim().split(/\s+/)
 
 #-------------------------------------------------------------------------------
 
+GzipConfig = [
+    /.*\.css$/
+    /.*\.js$/
+    /.*\.json$/
+    /.*\.svg$/
+]
+
+#-------------------------------------------------------------------------------
+
 build = ->
     log "starting build"
 
@@ -98,6 +109,7 @@ build = ->
     copyBowerFiles()
     buildNodeModules()
     buildAngFiles()
+    gzipFiles()
 
 #-------------------------------------------------------------------------------
 
@@ -141,7 +153,7 @@ tasks.bower =
 
 buildNodeModules = ->
     args = [
-        "--outfile node-modules-1.js"
+        "--outfile tmp/node-modules-1.js"
         "--debug"
         "--transform coffeeify"
         "--extension .coffee"
@@ -151,24 +163,18 @@ buildNodeModules = ->
     ]
 
     browserify args.join " "
-    catSourceMap "--fixFileNames node-modules-1.js node-modules-2.js"
+    catSourceMap "--fixFileNames tmp/node-modules-1.js tmp/node-modules-2.js"
 
     args = [
-        "                node-modules-2.js"
-        "--in-source-map node-modules-2.js.map.json"
-        "--output        node-modules-3.js"
-        "--source-map    node-modules-3.js.map.json"
+        "                 tmp/node-modules-2.js"
+        "--in-source-map  tmp/node-modules-2.js.map.json"
+        "--output         tmp/node-modules-3.js"
+        "--source-map     tmp/node-modules-3.js.map.json"
+        "--source-map-url     node-modules-3.js.map.json"
     ]
 
     uglifyjs args.join " "
-    catSourceMap "--fixFileNames node-modules-3.js www/node-modules.js"
-
-    rm "node-modules-1.js"
-    rm "node-modules-2.js"
-    rm "node-modules-2.js.map.json"
-    rm "node-modules-3.js"
-    rm "node-modules-3.js.map.json"
-
+    catSourceMap "--fixFileNames tmp/node-modules-3.js www/node-modules.js"
 
 #-------------------------------------------------------------------------------
 
@@ -203,42 +209,43 @@ copyBowerFiles = ->
     # run uglify over bower files
     args = [
         jsFiles.join " "
-        "--output         bower-files.js"
-        "--source-map     bower-files.js.map.json"
+        "--output         tmp/bower-files.js"
+        "--source-map     tmp/bower-files.js.map.json"
+        "--source-map-url     bower-files.js.map.json"
     ]
 
     uglifyjs args.join " "
 
-    catSourceMap "bower-files.js www/bower-files.js"
-    rm "bower-files.js"
-    rm "bower-files.js.map.json"
-
-###
-BowerConfig =
-
-    jquery:
-        version:    "2.0.x"
-        files:
-                    "^.js":  "."
-
-    bootstrap:
-        version:    "3.0.x"
-        files:
-                    "css/^.css":                               "dist/css"
-                    "css/^-theme.css":                         "dist/css"
-
-###
+    catSourceMap "tmp/bower-files.js www/bower-files.js"
 
 #-------------------------------------------------------------------------------
+gzipFiles = ->
+    wwwFiles = ls "-R", "www"
 
-runInDir = (dir, fn) ->
-    cwd = process.cwd()
+    gzipped     = 0
+    gzippedDone = 0
+    for file in wwwFiles
+        wwwFile = path.join "www", file
+        for pattern in GzipConfig
+            if wwwFile.match pattern
+                gzFile = path.join "www", "gz", file
 
-    cd dir
-    try
-        fn()
-    finally
-        cd cwd
+                mkdir "-p", path.dirname gzFile
+                gzipFile wwwFile, gzFile, ->
+                    gzippedDone++
+
+                gzipped++
+
+#-------------------------------------------------------------------------------
+gzipFile = (iFile, oFile, callback) ->
+    gzip = zlib.createGzip()
+
+    iStream = fs.createReadStream  iFile
+    oStream = fs.createWriteStream oFile
+
+    piping = iStream.pipe(gzip).pipe(oStream)
+
+    piping.on "finish", callback
 
 #-------------------------------------------------------------------------------
 

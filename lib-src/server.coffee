@@ -1,5 +1,6 @@
 # Licensed under the Apache License. See footer for details.
 
+fs     = require "fs"
 path   = require "path"
 crypto = require "crypto"
 
@@ -39,6 +40,7 @@ exports.run = (options) ->
     app.use setXSRFcookie
     # app.use express.logger()
     # app.use dumpRequest "app"
+    app.use gzipify WWW_DIR
     app.use "/", express.static WWW_DIR
 
     console.log "server starting: http://localhost:#{options.port}"
@@ -55,6 +57,37 @@ dumpRequest = (title) ->
         console.log "    path:    ", request.path
 
         next()
+
+#--------------------------------------------
+gzExists = {}
+
+gzipify = (dir) ->
+    (request, response, next) ->
+        gzFile = path.join "www", "gz#{request.url}"
+
+        unless gzExists[gzFile]?
+            if fs.existsSync gzFile
+                stats = fs.statSync gzFile
+                gzExists[gzFile] = true if stats.isFile()
+
+        return next() unless gzExists[gzFile]
+
+        response.set "Content-Encoding", "gzip"
+        setVary response, "Accept-Encoding"
+
+        request.url = "/gz#{request.url}"
+        next()
+
+#--------------------------------------------
+setVary = (response, newToken) ->
+    varyHeader = response.get("Vary") || ""
+
+    if "" is varyHeader
+        vary = "Accept-Encoding"
+    else if -1 is vary.indexOf "Accept-Encoding"
+        vary = "#{vary}, Accept-Encoding"
+
+    response.set "Vary", vary if vary?
 
 #-------------------------------------------------------------------------------
 setXSRFcookie = (request, response, next) ->

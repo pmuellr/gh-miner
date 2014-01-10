@@ -1,6 +1,6 @@
 # Licensed under the Apache License. See footer for details.
 
-AngTangle.module "app", []
+AngTangle.module "app", ["ngAnimate", "ngCookies", "ngResource", "ngRoute", "ngTouch"]
 
 #-------------------------------------------------------------------------------
 # Copyright 2014 Patrick Mueller
